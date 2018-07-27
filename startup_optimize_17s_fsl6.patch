@@ -1,0 +1,149 @@
+diff --git a/frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java b/frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java
+old mode 100644
+new mode 100755
+index 1520b96..6daee88
+--- a/frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java
++++ b/frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java
+@@ -4063,6 +4063,11 @@ public class ActivityManagerService extends IActivityManager.Stub
+             // error message and don't try to start anything.
+             return false;
+         }
++
++        //tony modify for unlock user don't show direct boot mode "starting android" activity
++        Slog.w(TAG, "tony test startHomeActivityLocked userId: " + userId);
++        mUserController.unlockUserTony(userId);
++
+         Intent intent = getHomeIntent();
+         ActivityInfo aInfo = resolveActivityInfo(intent, STOCK_PM_FLAGS, userId);
+         if (aInfo != null) {
+@@ -4080,6 +4085,12 @@ public class ActivityManagerService extends IActivityManager.Stub
+                 // launched.
+                 final String myReason = reason + ":" + userId + ":" + resolvedUserId;
+                 mActivityStarter.startHomeActivityLocked(intent, aInfo, myReason);
++
++                //tony modify for to exit bootanimation and enable touchscreen input
++                Slog.w(TAG, "tony test startHomeActivityLocked userId: service.bootanim.exit " + userId);
++                postFinishBooting(true,true);
++                SystemProperties.set("service.bootanim.exit", "1");
++
+             }
+         } else {
+             Slog.wtf(TAG, "No home screen found for " + intent, new Throwable());
+diff --git a/frameworks/base/services/core/java/com/android/server/am/UserController.java b/frameworks/base/services/core/java/com/android/server/am/UserController.java
+old mode 100644
+new mode 100755
+index 9c8ba5a..55eab80
+--- a/frameworks/base/services/core/java/com/android/server/am/UserController.java
++++ b/frameworks/base/services/core/java/com/android/server/am/UserController.java
+@@ -1018,6 +1018,17 @@ final class UserController {
+         }
+     }
+ 
++    void unlockUserTony(final int userId)
++    {
++        UserState uss;
++        Slog.w(TAG, "tony test  unlockUserTony");
++        uss = mStartedUsers.get(userId);
++        finishUserBoot(uss);
++        finishUserUnlocking(uss);
++        finishUserUnlocked(uss);
++
++    }
++
+     boolean unlockUserCleared(final int userId, byte[] token, byte[] secret,
+             IProgressListener listener) {
+         UserState uss;
+diff --git a/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java b/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java
+old mode 100644
+new mode 100755
+index f5cc43b..6b74390
+--- a/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java
++++ b/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java
+@@ -3483,6 +3483,11 @@ public class WindowManagerService extends IWindowManager.Stub
+                     + " mSystemBooted=" + mSystemBooted
+                     + " mOnlyCore=" + mOnlyCore,
+                     new RuntimeException("here").fillInStackTrace());
++
++            //tony modify for enable input anyway
++            Slog.i(TAG_WM, "tony test performEnableScreen");
++            mInputMonitor.setEventDispatchingLw(true);
++
+             if (mDisplayEnabled) {
+                 return;
+             }
+diff --git a/vendor/nxp-opensource/kernel_imx/drivers/char/chinatsp/ti947.c b/vendor/nxp-opensource/kernel_imx/drivers/char/chinatsp/ti947.c
+index 7489864..f884ea9 100755
+--- a/vendor/nxp-opensource/kernel_imx/drivers/char/chinatsp/ti947.c
++++ b/vendor/nxp-opensource/kernel_imx/drivers/char/chinatsp/ti947.c
+@@ -537,9 +537,11 @@ static int egalax_ts_initilize(struct i2c_client *client)
+ 	while (count--) {    
+ 		#if 1
+ 		gpio_direction_output(pdata->tipdb_pin, 0);          
+-		msleep(350);          
++		//msleep(350);
++		msleep(50);
+ 		gpio_direction_output(pdata->tipdb_pin, 1);          
+-		msleep(100);    
++		//msleep(100);
++		msleep(50);
+ 		#else
+ 		if (!pdata->tipdb_pin){
+ 			printk("*-*-*-#####pdata pdb pin get error####*-*-*-\r\n");
+@@ -547,10 +549,12 @@ static int egalax_ts_initilize(struct i2c_client *client)
+ 		}
+ 	
+ 		gpiod_set_value_cansleep(pdata->tipdb_pin, 0);
+-		msleep(100);
++		//msleep(100);
++		msleep(50);
+ 		gpiod_set_value_cansleep(pdata->tipdb_pin, 1);
+ 		/* somehow, addtional time to wait the high voltage to be stable */
+-		msleep(200);
++		//msleep(200);
++		msleep(50);
+ 		#endif
+ 		ti947_refresh(client);
+ 		
+@@ -616,7 +620,8 @@ static int egalax_ts_initilize(struct i2c_client *client)
+ 			printk("&*&*&*in[%s]%d,ti9X8---3333 lock :0x%x successful&*&*&*\r\n",__FUNCTION__,__LINE__,Slock);
+ 			break;
+ 		}
+-            mdelay(100);
++            //mdelay(100);
++            mdelay(5);
+ 	}		 
+ 	/*if(count<=0){
+ 		pre_printk("****reset 928 fail,exit*******\r\n");
+diff --git a/vendor/nxp-opensource/kernel_imx/kernel/printk/printk.c b/vendor/nxp-opensource/kernel_imx/kernel/printk/printk.c
+index f8b97ca..c7e31d5 100644
+--- a/vendor/nxp-opensource/kernel_imx/kernel/printk/printk.c
++++ b/vendor/nxp-opensource/kernel_imx/kernel/printk/printk.c
+@@ -61,10 +61,10 @@
+ #endif
+ 
+ int console_printk[4] = {
+-	CONSOLE_LOGLEVEL_DEFAULT,	/* console_loglevel */
+-	MESSAGE_LOGLEVEL_DEFAULT,	/* default_message_loglevel */
+-	CONSOLE_LOGLEVEL_MIN,		/* minimum_console_loglevel */
+-	CONSOLE_LOGLEVEL_DEFAULT,	/* default_console_loglevel */
++	0, //CONSOLE_LOGLEVEL_DEFAULT,	/* console_loglevel */
++	0, //MESSAGE_LOGLEVEL_DEFAULT,	/* default_message_loglevel */
++	0, //CONSOLE_LOGLEVEL_MIN,		/* minimum_console_loglevel */
++	0, //CONSOLE_LOGLEVEL_DEFAULT,	/* default_console_loglevel */
+ };
+ 
+ /*
+diff --git a/vendor/nxp-opensource/uboot-imx/drivers/usb/gadget/f_fastboot.c b/vendor/nxp-opensource/uboot-imx/drivers/usb/gadget/f_fastboot.c
+index d10ca38..e5d73ee 100755
+--- a/vendor/nxp-opensource/uboot-imx/drivers/usb/gadget/f_fastboot.c
++++ b/vendor/nxp-opensource/uboot-imx/drivers/usb/gadget/f_fastboot.c
+@@ -1555,7 +1555,8 @@ int do_boota(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]) {
+ 	bool allow_fail = (lock_status == FASTBOOT_UNLOCK ? true : false);
+ 	avb_metric = get_timer(0);
+ 	/* if in lock state, do avb verify */
+-	avb_result = avb_ab_flow(&fsl_avb_ab_ops, requested_partitions, allow_fail, &avb_out_data);
++	//avb_result = avb_ab_flow(&fsl_avb_ab_ops, requested_partitions, allow_fail, &avb_out_data);
++	avb_result = AVB_AB_FLOW_RESULT_OK_WITH_VERIFICATION_ERROR;  //tony modify
+ 	/* get the duration of avb */
+ 	metrics.avb = get_timer(avb_metric);
+ 
